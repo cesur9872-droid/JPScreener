@@ -5,13 +5,11 @@ const imageWrapper = document.getElementById('imageWrapper');
 const previewImage = document.getElementById('previewImage');
 const filterCanvas = document.getElementById('filterCanvas');
 const gridOverlay = document.getElementById('gridOverlay');
-const aspectRatioBox = document.getElementById('aspectRatioBox');
 const toolbar = document.getElementById('toolbar');
 
 const toggleGridBtn = document.getElementById('toggleGridBtn');
 const toggleDustBtn = document.getElementById('toggleDustBtn');
 const toggleClippingBtn = document.getElementById('toggleClippingBtn');
-const aspectRatioSelect = document.getElementById('aspectRatioSelect');
 const resetViewBtn = document.getElementById('resetViewBtn');
 
 const screenBtn = document.getElementById('screenBtn');
@@ -23,7 +21,6 @@ const histogramCanvas = document.getElementById('histogramCanvas');
 const resultsSection = document.getElementById('resultsSection');
 const loadingSpinner = document.getElementById('loadingSpinner');
 const resultsContent = document.getElementById('resultsContent');
-const downloadPdfBtn = document.getElementById('downloadPdfBtn');
 
 // Settings Elements
 const settingsModal = document.getElementById('settingsModal');
@@ -34,12 +31,9 @@ const apiKeyInput = document.getElementById('apiKeyInput');
 const modelSelect = document.getElementById('modelSelect');
 const themeSelect = document.getElementById('themeSelect');
 const strictnessSelect = document.getElementById('strictnessSelect');
+const languageSelect = document.getElementById('languageSelect');
 const autoDustCheckbox = document.getElementById('autoDustCheckbox');
-
-// Rulebook Modal
-const rulebookModal = document.getElementById('rulebookModal');
-const openRulebookBtn = document.getElementById('openRulebookBtn');
-const closeRulebookBtn = document.getElementById('closeRulebookBtn');
+const autoExifCheckbox = document.getElementById('autoExifCheckbox');
 
 let selectedFile = null;
 let originalImageObject = new Image();
@@ -53,7 +47,9 @@ document.addEventListener('DOMContentLoaded', () => {
   let savedModel = localStorage.getItem('user_gemini_model');
   const savedTheme = localStorage.getItem('app_theme') || 'dark';
   const savedStrictness = localStorage.getItem('app_strictness') || 'standard';
+  const savedLanguage = localStorage.getItem('app_language') || 'english';
   const savedAutoDust = localStorage.getItem('app_auto_dust') === 'true';
+  const savedAutoExif = localStorage.getItem('app_auto_exif') !== 'false';
 
   if (!savedModel || !VALID_MODELS.includes(savedModel)) {
     savedModel = 'gemini-3.6-flash';
@@ -64,7 +60,9 @@ document.addEventListener('DOMContentLoaded', () => {
   if (modelSelect) modelSelect.value = savedModel;
   if (themeSelect) themeSelect.value = savedTheme;
   if (strictnessSelect) strictnessSelect.value = savedStrictness;
+  if (languageSelect) languageSelect.value = savedLanguage;
   if (autoDustCheckbox) autoDustCheckbox.checked = savedAutoDust;
+  if (autoExifCheckbox) autoExifCheckbox.checked = savedAutoExif;
 
   applyTheme(savedTheme);
 });
@@ -77,25 +75,24 @@ function applyTheme(theme) {
 openSettingsBtn.addEventListener('click', () => settingsModal.classList.remove('hidden'));
 closeSettingsBtn.addEventListener('click', () => settingsModal.classList.add('hidden'));
 
-openRulebookBtn.addEventListener('click', () => rulebookModal.classList.remove('hidden'));
-closeRulebookBtn.addEventListener('click', () => rulebookModal.classList.add('hidden'));
-
 saveSettingsBtn.addEventListener('click', () => {
   const theme = themeSelect.value;
   localStorage.setItem('user_gemini_api_key', apiKeyInput.value.trim());
   localStorage.setItem('user_gemini_model', modelSelect.value);
   localStorage.setItem('app_theme', theme);
   localStorage.setItem('app_strictness', strictnessSelect.value);
+  localStorage.setItem('app_language', languageSelect.value);
   localStorage.setItem('app_auto_dust', autoDustCheckbox.checked);
+  localStorage.setItem('app_auto_exif', autoExifCheckbox.checked);
 
   applyTheme(theme);
   settingsModal.classList.add('hidden');
-  alert('Settings saved!');
+  alert('Preferences saved successfully!');
 });
 
 // Drag & Drop
 dropZone.addEventListener('click', (e) => {
-  if (e.target.closest('.toolbar') || e.target.closest('button') || e.target.closest('select')) return;
+  if (e.target.closest('.toolbar') || e.target.closest('button')) return;
   imageInput.click();
 });
 
@@ -128,11 +125,16 @@ function handleFile(file) {
       imageWrapper.classList.remove('hidden');
       toolbar.classList.remove('hidden');
       histogramSection.classList.remove('hidden');
-      exifSection.classList.remove('hidden');
       screenBtn.disabled = false;
 
       generateBWHistogram(originalImageObject);
-      extractEXIFData(selectedFile);
+
+      if (autoExifCheckbox.checked) {
+        exifSection.classList.remove('hidden');
+        extractEXIFData(selectedFile);
+      } else {
+        exifSection.classList.add('hidden');
+      }
 
       if (autoDustCheckbox.checked) {
         applyJetPhotosEqualizeFilter();
@@ -147,8 +149,8 @@ function handleFile(file) {
 function extractEXIFData(file) {
   exifGrid.innerHTML = '';
   EXIF.getData(file, function () {
-    const camera = EXIF.getTag(this, "Model") || "Unknown";
-    const lens = EXIF.getTag(this, "LensModel") || EXIF.getTag(this, "LensInfo") || "Standard Lens";
+    const camera = EXIF.getTag(this, "Model") || "N/A";
+    const lens = EXIF.getTag(this, "LensModel") || EXIF.getTag(this, "LensInfo") || "N/A";
     const shutter = EXIF.getTag(this, "ExposureTime");
     const aperture = EXIF.getTag(this, "FNumber");
     const iso = EXIF.getTag(this, "ISOSpeedRatings");
@@ -159,9 +161,9 @@ function extractEXIFData(file) {
     const formattedFocal = focal ? `${focal}mm` : "N/A";
 
     exifGrid.innerHTML = `
-      <div class="exif-item"><span>Camera Body</span><strong>${camera}</strong></div>
+      <div class="exif-item"><span>Camera</span><strong>${camera}</strong></div>
       <div class="exif-item"><span>Lens</span><strong>${lens}</strong></div>
-      <div class="exif-item"><span>Shutter Speed</span><strong>${formattedShutter}</strong></div>
+      <div class="exif-item"><span>Shutter</span><strong>${formattedShutter}</strong></div>
       <div class="exif-item"><span>Aperture</span><strong>${formattedAperture}</strong></div>
       <div class="exif-item"><span>ISO</span><strong>${iso || 'N/A'}</strong></div>
       <div class="exif-item"><span>Focal Length</span><strong>${formattedFocal}</strong></div>
@@ -169,7 +171,7 @@ function extractEXIFData(file) {
   });
 }
 
-// Inspector Controls
+// Controls
 toggleGridBtn.addEventListener('click', () => {
   gridOverlay.classList.toggle('hidden');
   toggleGridBtn.classList.toggle('active');
@@ -195,24 +197,12 @@ toggleClippingBtn.addEventListener('click', () => {
   }
 });
 
-aspectRatioSelect.addEventListener('change', (e) => {
-  aspectRatioBox.className = 'aspect-ratio-box';
-  if (e.target.value === 'none') {
-    aspectRatioBox.classList.add('hidden');
-  } else {
-    aspectRatioBox.classList.remove('hidden');
-    aspectRatioBox.classList.add(e.target.value);
-  }
-});
-
 resetViewBtn.addEventListener('click', resetView);
 
 function resetView() {
   previewImage.classList.remove('hidden');
   filterCanvas.classList.add('hidden');
   gridOverlay.classList.add('hidden');
-  aspectRatioBox.classList.add('hidden');
-  aspectRatioSelect.value = 'none';
   toggleGridBtn.classList.remove('active');
   toggleDustBtn.classList.remove('active');
   toggleClippingBtn.classList.remove('active');
@@ -265,7 +255,6 @@ function applyJetPhotosEqualizeFilter() {
   filterCanvas.classList.remove('hidden');
 }
 
-// Highlight & Shadow Overexposure/Clipping Mask
 function applyClippingMaskFilter() {
   const canvas = filterCanvas;
   const ctx = canvas.getContext('2d');
@@ -280,9 +269,9 @@ function applyClippingMaskFilter() {
   for (let i = 0; i < data.length; i += 4) {
     const r = data[i], g = data[i + 1], b = data[i + 2];
     if (r >= 254 && g >= 254 && b >= 254) {
-      data[i] = 255; data[i + 1] = 0; data[i + 2] = 0; // Pure Red for Overexposure
+      data[i] = 255; data[i + 1] = 0; data[i + 2] = 0; // Highlight Clipping (Red)
     } else if (r <= 2 && g <= 2 && b <= 2) {
-      data[i] = 0; data[i + 1] = 0; data[i + 2] = 255; // Pure Blue for Underexposure
+      data[i] = 0; data[i + 1] = 0; data[i + 2] = 255; // Shadow Clipping (Blue)
     }
   }
 
@@ -308,45 +297,60 @@ function generateBWHistogram(imgObj) {
   drawBWHistogramCanvas(bwHist);
 }
 
+// Compact Histogram Rendering (Matching Photo Reference Dimensions)
 function drawBWHistogramCanvas(hist) {
   const ctx = histogramCanvas.getContext('2d');
   const width = histogramCanvas.width;
   const height = histogramCanvas.height;
 
+  // Pure White Background
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, width, height);
 
   const maxVal = Math.max(...hist) || 1;
 
+  // Midtone horizontal reference dotted pink line
+  ctx.strokeStyle = '#f472b6';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([2, 2]);
+  ctx.beginPath();
+  ctx.moveTo(0, height * 0.7);
+  ctx.lineTo(width, height * 0.7);
+  ctx.stroke();
+  ctx.setLineDash([]); // Reset dash
+
+  // Solid Gray Area Fill Curve
   ctx.beginPath();
   ctx.moveTo(0, height);
 
   for (let i = 0; i < 256; i++) {
     const x = (i / 255) * width;
-    const barHeight = (hist[i] / maxVal) * (height - 5);
+    const barHeight = (hist[i] / maxVal) * (height - 2);
     ctx.lineTo(x, height - barHeight);
   }
 
   ctx.lineTo(width, height);
   ctx.closePath();
 
-  ctx.fillStyle = '#808080';
+  ctx.fillStyle = '#8e8e8e';
   ctx.fill();
 
-  ctx.strokeStyle = '#3b82f6';
-  ctx.lineWidth = 1.5;
+  // Solid Light-Blue Top Contour
+  ctx.strokeStyle = '#60a5fa';
+  ctx.lineWidth = 1.2;
   ctx.stroke();
 }
 
-// Gemini Screening Trigger
+// Gemini Screening API Integration
 screenBtn.addEventListener('click', async () => {
   if (!selectedFile) return;
 
   const userApiKey = localStorage.getItem('user_gemini_api_key') || '';
   let userModel = localStorage.getItem('user_gemini_model') || 'gemini-3.6-flash';
   const strictness = localStorage.getItem('app_strictness') || 'standard';
+  const language = localStorage.getItem('app_language') || 'english';
 
-  if (!userApiKey) return alert('Please click Settings (gear icon) and enter your Gemini API Key!');
+  if (!userApiKey) return alert('Please click Preferences (gear icon) and enter your Gemini API Key!');
   if (!VALID_MODELS.includes(userModel)) userModel = 'gemini-3.6-flash';
 
   resultsSection.classList.remove('hidden');
@@ -362,7 +366,8 @@ screenBtn.addEventListener('click', async () => {
     });
 
     const promptText = `You are a strict JetPhotos.com screening assistant. Analyze this aircraft photograph for JetPhotos acceptance standards.
-Strictness level requested: ${strictness}.
+Strictness level: ${strictness}.
+Language for response: ${language}.
 
 Return ONLY a raw JSON object with no markdown formatting matching this structure:
 {
@@ -427,11 +432,11 @@ function displayResults(data) {
   if (data.reject_reasons && data.reject_reasons.length > 0) {
     data.reject_reasons.forEach(item => {
       const li = document.createElement('li');
-      li.innerHTML = `<strong>[${item.category}] (${item.severity} Severity):</strong> ${item.description}`;
+      li.innerHTML = `<strong>[${item.category}] (${item.severity} Risk):</strong> ${item.description}`;
       reasonsList.appendChild(li);
     });
   } else {
-    reasonsList.innerHTML = '<li>No rejection reasons found. Photo looks good!</li>';
+    reasonsList.innerHTML = '<li>No rejection risks identified. Ready for upload!</li>';
   }
 
   const tipsList = document.getElementById('tipsList');
@@ -444,16 +449,3 @@ function displayResults(data) {
     });
   }
 }
-
-// Export PDF Report
-downloadPdfBtn.addEventListener('click', () => {
-  const element = document.getElementById('resultsContent');
-  const opt = {
-    margin:       0.5,
-    filename:     'JetPhotos_Screening_Report.pdf',
-    image:        { type: 'jpeg', quality: 0.98 },
-    html2canvas:  { scale: 2 },
-    jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
-  };
-  html2pdf().set(opt).from(element).save();
-});
