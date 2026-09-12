@@ -6,7 +6,7 @@ import { GoogleGenAI } from '@google/genai';
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Enable CORS for all routes and custom headers
+// Enable CORS explicitly for preflight OPTIONS requests and custom headers
 app.use(cors({
   origin: '*',
   allowedHeaders: ['Content-Type', 'x-api-key', 'x-model', 'x-strictness'],
@@ -16,6 +16,7 @@ app.use(cors({
 const upload = multer({ storage: multer.memoryStorage() });
 app.use(express.json());
 
+// Health check endpoint
 app.get('/', (req, res) => {
   res.send('JetPhotos Screener API Backend is running!');
 });
@@ -26,17 +27,18 @@ app.post('/api/prescreen', upload.single('photo'), async (req, res) => {
       return res.status(400).json({ error: 'No image file uploaded.' });
     }
 
+    // Retrieve headers or use environment fallback
     const apiKey = req.headers['x-api-key'] || process.env.GEMINI_API_KEY;
     let modelName = req.headers['x-model'] || 'gemini-2.5-flash';
     const strictness = req.headers['x-strictness'] || 'standard';
 
-    // Fallback if invalid model sent
-    if (modelName.includes('3.5')) {
+    // Auto-fix invalid model selection from older script defaults
+    if (!modelName || modelName.includes('3.5')) {
       modelName = 'gemini-2.5-flash';
     }
 
     if (!apiKey) {
-      return res.status(401).json({ error: 'Missing GEMINI_API_KEY. Set it in Settings or Render env.' });
+      return res.status(401).json({ error: 'Missing API Key. Set GEMINI_API_KEY in Render environment variables or site Settings.' });
     }
 
     const ai = new GoogleGenAI({ apiKey });
@@ -74,7 +76,8 @@ Return ONLY a raw JSON object with no markdown formatting or backticks matching 
     });
 
     let textResponse = response.text.trim();
-
+    
+    // Clean potential markdown blocks
     if (textResponse.startsWith('```json')) {
       textResponse = textResponse.replace(/^```json/, '').replace(/```$/, '').trim();
     } else if (textResponse.startsWith('```')) {
