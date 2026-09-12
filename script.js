@@ -264,7 +264,7 @@ screenBtn.addEventListener('click', async () => {
   formData.append('photo', selectedFile);
 
   try {
-    const response = await fetch('/api/prescreen', {
+    const response = await fetch('https://jetphotosscreener.onrender.com/api/prescreen', {
       method: 'POST',
       headers: {
         'x-api-key': userApiKey,
