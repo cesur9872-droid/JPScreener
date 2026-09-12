@@ -1,3 +1,4 @@
+// DOM Element References
 const dropZone = document.getElementById('dropZone');
 const imageInput = document.getElementById('imageInput');
 const dropContent = document.getElementById('dropContent');
@@ -21,15 +22,16 @@ const afterCanvas = document.getElementById('afterCanvas');
 const compareSlider = document.getElementById('compareSlider');
 const toggleCompareBtn = document.getElementById('toggleCompareBtn');
 
+// Toolbar Buttons
 const toggleGridBtn = document.getElementById('toggleGridBtn');
 const toggleDustBtn = document.getElementById('toggleDustBtn');
 const toggleClippingBtn = document.getElementById('toggleClippingBtn');
 const resetViewBtn = document.getElementById('resetViewBtn');
 
+// Control & Feedback Sections
 const screenBtn = document.getElementById('screenBtn');
 const exifSection = document.getElementById('exifSection');
 const exifGrid = document.getElementById('exifGrid');
-
 const histogramSection = document.getElementById('histogramSection');
 const histogramCanvas = document.getElementById('histogramCanvas');
 const resultsSection = document.getElementById('resultsSection');
@@ -55,7 +57,7 @@ let activeBatchIndex = 0;
 let originalImageObject = new Image();
 const VALID_MODELS = ['gemini-3.6-flash', 'gemini-3.5-flash'];
 
-// App Init
+// App Initialization
 document.addEventListener('DOMContentLoaded', () => {
   const savedKey = localStorage.getItem('user_gemini_api_key') || '';
   let savedModel = localStorage.getItem('user_gemini_model');
@@ -104,7 +106,7 @@ saveSettingsBtn.addEventListener('click', () => {
   alert('Preferences saved successfully!');
 });
 
-// Drag & Drop & Multi-Upload
+// Drag & Drop / File Input Controls
 dropZone.addEventListener('click', (e) => {
   if (e.target.closest('.toolbar') || e.target.closest('.compare-container') || e.target.closest('button')) return;
   imageInput.click();
@@ -129,7 +131,7 @@ dropZone.addEventListener('drop', (e) => {
 
 function handleBatchFiles(files) {
   const validFiles = files.filter(file => file.type.startsWith('image/'));
-  if (!validFiles.length) return alert('Upload valid images.');
+  if (!validFiles.length) return alert('Please upload valid images (JPEG, PNG).');
 
   validFiles.forEach(file => {
     batchFiles.push({ file, result: null, previewUrl: URL.createObjectURL(file) });
@@ -243,28 +245,34 @@ toggleCompareBtn.addEventListener('click', () => {
 function renderSimulatedFixCanvas() {
   const canvas = afterCanvas;
   const ctx = canvas.getContext('2d');
-  const w = originalImageObject.naturalWidth;
-  const h = originalImageObject.naturalHeight;
-  canvas.width = w; canvas.height = h;
+  
+  const w = originalImageObject.naturalWidth || previewImage.naturalWidth;
+  const h = originalImageObject.naturalHeight || previewImage.naturalHeight;
 
-  ctx.drawImage(originalImageObject, 0, 0);
+  if (!w || !h) return;
 
-  // Apply subtle contrast/sharpness simulation
+  canvas.width = w;
+  canvas.height = h;
+  ctx.drawImage(originalImageObject, 0, 0, w, h);
+
   const imgData = ctx.getImageData(0, 0, w, h);
   const data = imgData.data;
   
+  // Apply a dynamic contrast and slight saturation enhancement to simulate ideal export
   for (let i = 0; i < data.length; i += 4) {
-    // Slight Contrast Stretch
-    data[i] = Math.min(255, Math.max(0, (data[i] - 128) * 1.1 + 128));
-    data[i+1] = Math.min(255, Math.max(0, (data[i+1] - 128) * 1.1 + 128));
-    data[i+2] = Math.min(255, Math.max(0, (data[i+2] - 128) * 1.1 + 128));
+    data[i]     = Math.min(255, Math.max(0, (data[i] - 128) * 1.25 + 128));     // Red Contrast
+    data[i + 1] = Math.min(255, Math.max(0, (data[i + 1] - 128) * 1.25 + 128)); // Green Contrast
+    data[i + 2] = Math.min(255, Math.max(0, (data[i + 2] - 128) * 1.25 + 128)); // Blue Contrast
   }
+  
   ctx.putImageData(imgData, 0, 0);
 }
 
-// EXIF Data Extraction
+// EXIF Data Reader
 function extractEXIFData(file) {
   exifGrid.innerHTML = '';
+  if (typeof EXIF === 'undefined') return;
+
   EXIF.getData(file, function () {
     const camera = EXIF.getTag(this, "Model") || "N/A";
     const lens = EXIF.getTag(this, "LensModel") || EXIF.getTag(this, "LensInfo") || "N/A";
@@ -288,7 +296,7 @@ function extractEXIFData(file) {
   });
 }
 
-// Controls
+// Toolbar Action Listeners
 toggleGridBtn.addEventListener('click', () => {
   gridOverlay.classList.toggle('hidden');
   toggleGridBtn.classList.toggle('active');
@@ -331,13 +339,18 @@ function resetView() {
   toggleCompareBtn.classList.remove('active');
 }
 
+// Dust Equalizer Filter Canvas
 function applyJetPhotosEqualizeFilter() {
   const canvas = filterCanvas;
   const ctx = canvas.getContext('2d');
-  const w = originalImageObject.naturalWidth;
-  const h = originalImageObject.naturalHeight;
-  canvas.width = w; canvas.height = h;
-  ctx.drawImage(originalImageObject, 0, 0);
+  const w = originalImageObject.naturalWidth || previewImage.naturalWidth;
+  const h = originalImageObject.naturalHeight || previewImage.naturalHeight;
+  
+  if (!w || !h) return;
+
+  canvas.width = w; 
+  canvas.height = h;
+  ctx.drawImage(originalImageObject, 0, 0, w, h);
 
   const srcData = ctx.getImageData(0, 0, w, h);
   const data = srcData.data;
@@ -378,23 +391,37 @@ function applyJetPhotosEqualizeFilter() {
   filterCanvas.classList.remove('hidden');
 }
 
+// Highlights & Shadows Clipping Mask Filter Canvas
 function applyClippingMaskFilter() {
   const canvas = filterCanvas;
   const ctx = canvas.getContext('2d');
-  const w = originalImageObject.naturalWidth;
-  const h = originalImageObject.naturalHeight;
-  canvas.width = w; canvas.height = h;
-  ctx.drawImage(originalImageObject, 0, 0);
+  
+  const w = originalImageObject.naturalWidth || previewImage.naturalWidth;
+  const h = originalImageObject.naturalHeight || previewImage.naturalHeight;
+  
+  if (!w || !h) return;
+
+  canvas.width = w;
+  canvas.height = h;
+  ctx.drawImage(originalImageObject, 0, 0, w, h);
 
   const srcData = ctx.getImageData(0, 0, w, h);
   const data = srcData.data;
 
   for (let i = 0; i < data.length; i += 4) {
     const r = data[i], g = data[i + 1], b = data[i + 2];
-    if (r >= 254 && g >= 254 && b >= 254) {
-      data[i] = 255; data[i + 1] = 0; data[i + 2] = 0;
-    } else if (r <= 2 && g <= 2 && b <= 2) {
-      data[i] = 0; data[i + 1] = 0; data[i + 2] = 255;
+    
+    // Highlight Over-exposure Threshold (Red)
+    if (r >= 245 && g >= 245 && b >= 245) {
+      data[i] = 255; 
+      data[i + 1] = 0; 
+      data[i + 2] = 0;
+    } 
+    // Shadow Under-exposure Threshold (Blue)
+    else if (r <= 10 && g <= 10 && b <= 10) {
+      data[i] = 0; 
+      data[i + 1] = 0; 
+      data[i + 2] = 255;
     }
   }
 
@@ -403,10 +430,12 @@ function applyClippingMaskFilter() {
   filterCanvas.classList.remove('hidden');
 }
 
+// Luminance Histogram Calculation
 function generateBWHistogram(imgObj) {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
-  canvas.width = imgObj.naturalWidth; canvas.height = imgObj.naturalHeight;
+  canvas.width = imgObj.naturalWidth || 256; 
+  canvas.height = imgObj.naturalHeight || 256;
   ctx.drawImage(imgObj, 0, 0);
 
   const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
@@ -459,7 +488,7 @@ function drawBWHistogramCanvas(hist) {
   ctx.stroke();
 }
 
-// Gemini Screening API Integration
+// Gemini Vision Screening Call
 screenBtn.addEventListener('click', async () => {
   if (!batchFiles.length) return;
 
@@ -530,7 +559,7 @@ Return ONLY a raw JSON object with no markdown formatting matching this structur
 
     const parsedData = JSON.parse(rawText);
     
-    // Save Result to Active Batch Item State
+    // Attach screening findings to active batch file object
     activeItem.result = parsedData;
     renderBatchGrid();
 
@@ -540,7 +569,7 @@ Return ONLY a raw JSON object with no markdown formatting matching this structur
   } catch (err) {
     console.error(err);
     loadingSpinner.classList.add('hidden');
-    alert('An error occurred during screening.');
+    alert('An error occurred during screening analysis.');
   }
 });
 
