@@ -33,7 +33,7 @@ let selectedFile = null;
 let originalImageObject = new Image();
 
 // Valid API Models
-const VALID_MODELS = ['gemini-3.5-flash', 'gemini-3.5-pro', 'gemini-3.5-flash'];
+const VALID_MODELS = ['gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-2.5-pro'];
 
 // Startup Settings Initialization
 document.addEventListener('DOMContentLoaded', () => {
@@ -44,7 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const savedAutoDust = localStorage.getItem('app_auto_dust') === 'true';
 
   if (!savedModel || !VALID_MODELS.includes(savedModel)) {
-    savedModel = 'gemini-2.5-flash';
+    savedModel = 'gemini-3.5-flash';
     localStorage.setItem('user_gemini_model', savedModel);
   }
 
@@ -244,12 +244,12 @@ function drawBWHistogramCanvas(hist) {
   ctx.fill();
 }
 
-// API Trigger (Direct Browser Gemini Call for GitHub Pages)
+// API Trigger (Direct Gemini 3.5 Flash Integration)
 screenBtn.addEventListener('click', async () => {
   if (!selectedFile) return;
 
   const userApiKey = localStorage.getItem('user_gemini_api_key') || '';
-  let userModel = localStorage.getItem('user_gemini_model') || 'gemini-2.5-flash';
+  let userModel = localStorage.getItem('user_gemini_model') || 'gemini-3.5-flash';
   const strictness = localStorage.getItem('app_strictness') || 'standard';
 
   if (!userApiKey) {
@@ -257,8 +257,8 @@ screenBtn.addEventListener('click', async () => {
     return;
   }
 
-  if (!VALID_MODELS.includes(userModel) || userModel.includes('3.5')) {
-    userModel = 'gemini-2.5-flash';
+  if (!VALID_MODELS.includes(userModel)) {
+    userModel = 'gemini-3.5-flash';
   }
 
   resultsSection.classList.remove('hidden');
