@@ -33,7 +33,7 @@ let selectedFile = null;
 let originalImageObject = new Image();
 
 // Valid API Models
-const VALID_MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-1.5-flash'];
+const VALID_MODELS = ['gemini-3.5-flash', 'gemini-3.5-pro', 'gemini-3.5-flash'];
 
 // Startup Settings Initialization
 document.addEventListener('DOMContentLoaded', () => {
