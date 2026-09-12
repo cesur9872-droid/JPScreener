@@ -3,19 +3,23 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>JetPhotos AI Pre-Screener</title>
+  <title>JetPhotos AI Pre-Screener Pro</title>
   <link rel="stylesheet" href="style.css">
+  <!-- Libraries for EXIF Extraction and HTML to PDF Export -->
+  <script src="https://cdn.jsdelivr.net/npm/exif-js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body>
   <div class="container">
     <header class="header-container">
       <div>
         <h1>JetPhotos AI Pre-Screener</h1>
-        <p>Analyze aviation photos against database criteria and visual standards.</p>
+        <p>Analyze aviation photos against database criteria, visual standards, and EXIF rules.</p>
       </div>
-      <button id="openSettingsBtn" class="settings-btn" title="Settings">
-        <span class="gear-icon">⚙️</span> Settings
-      </button>
+      <div class="header-actions">
+        <button id="openRulebookBtn" class="secondary-btn" title="JetPhotos Guidelines">📖 Rulebook</button>
+        <button id="openSettingsBtn" class="settings-btn" title="Settings"><span class="gear-icon">⚙️</span> Settings</button>
+      </div>
     </header>
 
     <main>
@@ -33,28 +37,44 @@
           <div class="image-wrapper hidden" id="imageWrapper">
             <img id="previewImage" class="preview-img" alt="Uploaded Preview">
             <canvas id="filterCanvas" class="hidden"></canvas>
-            
-            <!-- JetPhotos Style Rule-of-Thirds Grid Overlay -->
+
+            <!-- Grid Overlay -->
             <div id="gridOverlay" class="grid-overlay hidden">
               <div class="grid-line vertical-1"></div>
               <div class="grid-line vertical-2"></div>
               <div class="grid-line horizontal-1"></div>
               <div class="grid-line horizontal-2"></div>
             </div>
+
+            <!-- Aspect Ratio Box -->
+            <div id="aspectRatioBox" class="aspect-ratio-box hidden ratio-3-2"></div>
           </div>
         </div>
 
-        <!-- JetPhotos Inspector Tools -->
+        <!-- Toolbar -->
         <div class="toolbar hidden" id="toolbar">
           <button id="toggleGridBtn" class="tool-btn">🎯 Centering Grid</button>
           <button id="toggleDustBtn" class="tool-btn">🔍 Dust Equalizer</button>
+          <button id="toggleClippingBtn" class="tool-btn">⚠️ Clipping (Clipping Mask)</button>
+          <select id="aspectRatioSelect" class="tool-select">
+            <option value="none">Aspect Ratio: Off</option>
+            <option value="ratio-3-2">Aspect Ratio: 3:2 (Standard)</option>
+            <option value="ratio-4-3">Aspect Ratio: 4:3</option>
+            <option value="ratio-16-9">Aspect Ratio: 16:9</option>
+          </select>
           <button id="resetViewBtn" class="tool-btn">↺ Original</button>
         </div>
 
         <button id="screenBtn" class="btn" disabled>Screen Photo</button>
       </section>
 
-      <!-- JetPhotos Style Histogram -->
+      <!-- EXIF Metadata Card -->
+      <section class="exif-section hidden" id="exifSection">
+        <h3>Camera EXIF Data</h3>
+        <div class="exif-grid" id="exifGrid"></div>
+      </section>
+
+      <!-- Histogram -->
       <section class="histogram-section hidden" id="histogramSection">
         <div class="histogram-header">
           <h3>Blacks & Whites Histogram</h3>
@@ -71,7 +91,7 @@
         </div>
       </section>
 
-      <!-- Screening Results -->
+      <!-- Results Section -->
       <section class="results-section hidden" id="resultsSection">
         <div class="loading hidden" id="loadingSpinner">
           <div class="spinner"></div>
@@ -79,10 +99,14 @@
         </div>
 
         <div id="resultsContent" class="results-content hidden">
-          <div class="verdict-card" id="verdictCard">
-            <div class="badge" id="verdictBadge">ACCEPTED</div>
-            <div class="score-box">Score: <span id="scoreText" class="score-number">--</span>/100</div>
+          <div class="results-header-bar">
+            <div class="verdict-card" id="verdictCard">
+              <div class="badge" id="verdictBadge">ACCEPTED</div>
+              <div class="score-box">Score: <span id="scoreText" class="score-number">--</span>/100</div>
+            </div>
+            <button id="downloadPdfBtn" class="secondary-btn">📄 Export PDF Report</button>
           </div>
+          
           <p id="summaryText" class="summary" style="margin-top:0.8rem; line-height:1.5;"></p>
 
           <div class="reasons-box">
@@ -99,7 +123,6 @@
     </main>
   </div>
 
-  <!-- Credits Footer -->
   <footer style="text-align: center; margin-top: 2rem; padding: 1rem 0; font-size: 0.9rem; color: var(--text-muted, #94a3b8);">
     <p>Created by <strong>Cesur</strong> | Follow on TikTok: <a href="https://www.tiktok.com/@cesurphotographer?ysclid=mtyum3r93s21032001" target="_blank" rel="noopener" style="color: #38bdf8; text-decoration: underline; font-weight: 500;">@cesurphotographer</a></p>
   </footer>
@@ -127,7 +150,7 @@
               <li>Go to <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" style="color: #60a5fa; text-decoration: underline;">Google AI Studio</a>.</li>
               <li>Sign in with your Google account.</li>
               <li>Click <strong>"Create API Key"</strong>.</li>
-              <li>Copy the generated key, paste it into the box above, and click <strong>Save Preferences</strong>.</li>
+              <li>Copy the key, paste it into the box above, and click <strong>Save Preferences</strong>.</li>
             </ol>
           </div>
         </div>
@@ -167,6 +190,27 @@
       </div>
       <div class="modal-footer" style="margin-top:1.25rem;">
         <button id="saveSettingsBtn" class="btn" style="margin-top:0;">Save Preferences</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rulebook Modal -->
+  <div id="rulebookModal" class="modal hidden">
+    <div class="modal-content" style="max-width: 650px; max-height: 80vh; overflow-y: auto;">
+      <div class="modal-header">
+        <h2>JetPhotos Guidelines Reference</h2>
+        <button id="closeRulebookBtn" class="close-btn">&times;</button>
+      </div>
+      <div class="modal-body" style="font-size: 0.9rem; line-height: 1.5;">
+        <p><strong>Common Rejection Reasons:</strong></p>
+        <ul style="margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.6rem;">
+          <li><strong>Centering:</strong> Aircraft must be centrally positioned vertically and horizontally unless taking up the full frame.</li>
+          <li><strong>Softness / Blur:</strong> Entire fuselage and registration code must be crisp and in sharp focus.</li>
+          <li><strong>Over-exposure / Under-exposure:</strong> Blown-out whites or crushed shadows with missing detail are rejected.</li>
+          <li><strong>Dust Spots:</strong> Sensor dust visible in sky areas must be fully cleaned.</li>
+          <li><strong>Level Horizon:</strong> Runway lines, buildings, or background sea/horizon must be level.</li>
+          <li><strong>Heat Haze:</strong> Heat distortion from engines or ground reflection degrading image quality.</li>
+        </ul>
       </div>
     </div>
   </div>
