@@ -5,18 +5,25 @@ const imageWrapper = document.getElementById('imageWrapper');
 const previewImage = document.getElementById('previewImage');
 const filterCanvas = document.getElementById('filterCanvas');
 const gridOverlay = document.getElementById('gridOverlay');
+const aspectRatioBox = document.getElementById('aspectRatioBox');
 const toolbar = document.getElementById('toolbar');
 
 const toggleGridBtn = document.getElementById('toggleGridBtn');
 const toggleDustBtn = document.getElementById('toggleDustBtn');
+const toggleClippingBtn = document.getElementById('toggleClippingBtn');
+const aspectRatioSelect = document.getElementById('aspectRatioSelect');
 const resetViewBtn = document.getElementById('resetViewBtn');
 
 const screenBtn = document.getElementById('screenBtn');
+const exifSection = document.getElementById('exifSection');
+const exifGrid = document.getElementById('exifGrid');
+
 const histogramSection = document.getElementById('histogramSection');
 const histogramCanvas = document.getElementById('histogramCanvas');
 const resultsSection = document.getElementById('resultsSection');
 const loadingSpinner = document.getElementById('loadingSpinner');
 const resultsContent = document.getElementById('resultsContent');
+const downloadPdfBtn = document.getElementById('downloadPdfBtn');
 
 // Settings Elements
 const settingsModal = document.getElementById('settingsModal');
@@ -29,13 +36,18 @@ const themeSelect = document.getElementById('themeSelect');
 const strictnessSelect = document.getElementById('strictnessSelect');
 const autoDustCheckbox = document.getElementById('autoDustCheckbox');
 
+// Rulebook Modal
+const rulebookModal = document.getElementById('rulebookModal');
+const openRulebookBtn = document.getElementById('openRulebookBtn');
+const closeRulebookBtn = document.getElementById('closeRulebookBtn');
+
 let selectedFile = null;
 let originalImageObject = new Image();
 
 // Valid API Models
 const VALID_MODELS = ['gemini-3.6-flash', 'gemini-3.5-flash'];
 
-// Startup Settings Initialization
+// Startup Initialization
 document.addEventListener('DOMContentLoaded', () => {
   const savedKey = localStorage.getItem('user_gemini_api_key') || '';
   let savedModel = localStorage.getItem('user_gemini_model');
@@ -43,7 +55,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const savedStrictness = localStorage.getItem('app_strictness') || 'standard';
   const savedAutoDust = localStorage.getItem('app_auto_dust') === 'true';
 
-  // Force clean migration away from deprecated gemini-2.5 models
   if (!savedModel || !VALID_MODELS.includes(savedModel)) {
     savedModel = 'gemini-3.6-flash';
     localStorage.setItem('user_gemini_model', savedModel);
@@ -66,6 +77,9 @@ function applyTheme(theme) {
 openSettingsBtn.addEventListener('click', () => settingsModal.classList.remove('hidden'));
 closeSettingsBtn.addEventListener('click', () => settingsModal.classList.add('hidden'));
 
+openRulebookBtn.addEventListener('click', () => rulebookModal.classList.remove('hidden'));
+closeRulebookBtn.addEventListener('click', () => rulebookModal.classList.add('hidden'));
+
 saveSettingsBtn.addEventListener('click', () => {
   const theme = themeSelect.value;
   localStorage.setItem('user_gemini_api_key', apiKeyInput.value.trim());
@@ -81,7 +95,7 @@ saveSettingsBtn.addEventListener('click', () => {
 
 // Drag & Drop
 dropZone.addEventListener('click', (e) => {
-  if (e.target.closest('.toolbar') || e.target.closest('button')) return;
+  if (e.target.closest('.toolbar') || e.target.closest('button') || e.target.closest('select')) return;
   imageInput.click();
 });
 
@@ -92,9 +106,7 @@ dropZone.addEventListener('dragover', (e) => {
   dropZone.classList.add('dragover');
 });
 
-dropZone.addEventListener('dragleave', () => {
-  dropZone.classList.remove('dragover');
-});
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
 
 dropZone.addEventListener('drop', (e) => {
   e.preventDefault();
@@ -116,9 +128,11 @@ function handleFile(file) {
       imageWrapper.classList.remove('hidden');
       toolbar.classList.remove('hidden');
       histogramSection.classList.remove('hidden');
+      exifSection.classList.remove('hidden');
       screenBtn.disabled = false;
 
       generateBWHistogram(originalImageObject);
+      extractEXIFData(selectedFile);
 
       if (autoDustCheckbox.checked) {
         applyJetPhotosEqualizeFilter();
@@ -129,6 +143,32 @@ function handleFile(file) {
   reader.readAsDataURL(file);
 }
 
+// EXIF Data Extraction
+function extractEXIFData(file) {
+  exifGrid.innerHTML = '';
+  EXIF.getData(file, function () {
+    const camera = EXIF.getTag(this, "Model") || "Unknown";
+    const lens = EXIF.getTag(this, "LensModel") || EXIF.getTag(this, "LensInfo") || "Standard Lens";
+    const shutter = EXIF.getTag(this, "ExposureTime");
+    const aperture = EXIF.getTag(this, "FNumber");
+    const iso = EXIF.getTag(this, "ISOSpeedRatings");
+    const focal = EXIF.getTag(this, "FocalLength");
+
+    const formattedShutter = shutter ? (shutter < 1 ? `1/${Math.round(1 / shutter)}s` : `${shutter}s`) : "N/A";
+    const formattedAperture = aperture ? `f/${aperture}` : "N/A";
+    const formattedFocal = focal ? `${focal}mm` : "N/A";
+
+    exifGrid.innerHTML = `
+      <div class="exif-item"><span>Camera Body</span><strong>${camera}</strong></div>
+      <div class="exif-item"><span>Lens</span><strong>${lens}</strong></div>
+      <div class="exif-item"><span>Shutter Speed</span><strong>${formattedShutter}</strong></div>
+      <div class="exif-item"><span>Aperture</span><strong>${formattedAperture}</strong></div>
+      <div class="exif-item"><span>ISO</span><strong>${iso || 'N/A'}</strong></div>
+      <div class="exif-item"><span>Focal Length</span><strong>${formattedFocal}</strong></div>
+    `;
+  });
+}
+
 // Inspector Controls
 toggleGridBtn.addEventListener('click', () => {
   gridOverlay.classList.toggle('hidden');
@@ -136,11 +176,32 @@ toggleGridBtn.addEventListener('click', () => {
 });
 
 toggleDustBtn.addEventListener('click', () => {
-  if (filterCanvas.classList.contains('hidden')) {
+  toggleClippingBtn.classList.remove('active');
+  if (filterCanvas.classList.contains('hidden') || !toggleDustBtn.classList.contains('active')) {
     applyJetPhotosEqualizeFilter();
     toggleDustBtn.classList.add('active');
   } else {
     resetView();
+  }
+});
+
+toggleClippingBtn.addEventListener('click', () => {
+  toggleDustBtn.classList.remove('active');
+  if (filterCanvas.classList.contains('hidden') || !toggleClippingBtn.classList.contains('active')) {
+    applyClippingMaskFilter();
+    toggleClippingBtn.classList.add('active');
+  } else {
+    resetView();
+  }
+});
+
+aspectRatioSelect.addEventListener('change', (e) => {
+  aspectRatioBox.className = 'aspect-ratio-box';
+  if (e.target.value === 'none') {
+    aspectRatioBox.classList.add('hidden');
+  } else {
+    aspectRatioBox.classList.remove('hidden');
+    aspectRatioBox.classList.add(e.target.value);
   }
 });
 
@@ -150,8 +211,11 @@ function resetView() {
   previewImage.classList.remove('hidden');
   filterCanvas.classList.add('hidden');
   gridOverlay.classList.add('hidden');
+  aspectRatioBox.classList.add('hidden');
+  aspectRatioSelect.value = 'none';
   toggleGridBtn.classList.remove('active');
   toggleDustBtn.classList.remove('active');
+  toggleClippingBtn.classList.remove('active');
 }
 
 function applyJetPhotosEqualizeFilter() {
@@ -159,8 +223,7 @@ function applyJetPhotosEqualizeFilter() {
   const ctx = canvas.getContext('2d');
   const w = originalImageObject.naturalWidth;
   const h = originalImageObject.naturalHeight;
-  canvas.width = w;
-  canvas.height = h;
+  canvas.width = w; canvas.height = h;
   ctx.drawImage(originalImageObject, 0, 0);
 
   const srcData = ctx.getImageData(0, 0, w, h);
@@ -202,11 +265,36 @@ function applyJetPhotosEqualizeFilter() {
   filterCanvas.classList.remove('hidden');
 }
 
+// Highlight & Shadow Overexposure/Clipping Mask
+function applyClippingMaskFilter() {
+  const canvas = filterCanvas;
+  const ctx = canvas.getContext('2d');
+  const w = originalImageObject.naturalWidth;
+  const h = originalImageObject.naturalHeight;
+  canvas.width = w; canvas.height = h;
+  ctx.drawImage(originalImageObject, 0, 0);
+
+  const srcData = ctx.getImageData(0, 0, w, h);
+  const data = srcData.data;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i], g = data[i + 1], b = data[i + 2];
+    if (r >= 254 && g >= 254 && b >= 254) {
+      data[i] = 255; data[i + 1] = 0; data[i + 2] = 0; // Pure Red for Overexposure
+    } else if (r <= 2 && g <= 2 && b <= 2) {
+      data[i] = 0; data[i + 1] = 0; data[i + 2] = 255; // Pure Blue for Underexposure
+    }
+  }
+
+  ctx.putImageData(srcData, 0, 0);
+  previewImage.classList.add('hidden');
+  filterCanvas.classList.remove('hidden');
+}
+
 function generateBWHistogram(imgObj) {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
-  canvas.width = imgObj.naturalWidth;
-  canvas.height = imgObj.naturalHeight;
+  canvas.width = imgObj.naturalWidth; canvas.height = imgObj.naturalHeight;
   ctx.drawImage(imgObj, 0, 0);
 
   const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
@@ -225,7 +313,6 @@ function drawBWHistogramCanvas(hist) {
   const width = histogramCanvas.width;
   const height = histogramCanvas.height;
 
-  // Clean canvas background (Pure White like JetPhotos/Photoshop panel)
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, width, height);
 
@@ -243,17 +330,15 @@ function drawBWHistogramCanvas(hist) {
   ctx.lineTo(width, height);
   ctx.closePath();
 
-  // Solid Gray Histogram Fill
   ctx.fillStyle = '#808080';
   ctx.fill();
 
-  // Light Blue Outline Stroke (Photoshop / JetPhotos Style)
   ctx.strokeStyle = '#3b82f6';
   ctx.lineWidth = 1.5;
   ctx.stroke();
 }
 
-// API Trigger (Direct Browser Gemini 3.6 Flash Integration)
+// Gemini Screening Trigger
 screenBtn.addEventListener('click', async () => {
   if (!selectedFile) return;
 
@@ -261,14 +346,8 @@ screenBtn.addEventListener('click', async () => {
   let userModel = localStorage.getItem('user_gemini_model') || 'gemini-3.6-flash';
   const strictness = localStorage.getItem('app_strictness') || 'standard';
 
-  if (!userApiKey) {
-    alert('Please click Settings (gear icon) and enter your Gemini API Key!');
-    return;
-  }
-
-  if (!VALID_MODELS.includes(userModel)) {
-    userModel = 'gemini-3.6-flash';
-  }
+  if (!userApiKey) return alert('Please click Settings (gear icon) and enter your Gemini API Key!');
+  if (!VALID_MODELS.includes(userModel)) userModel = 'gemini-3.6-flash';
 
   resultsSection.classList.remove('hidden');
   loadingSpinner.classList.remove('hidden');
@@ -285,7 +364,7 @@ screenBtn.addEventListener('click', async () => {
     const promptText = `You are a strict JetPhotos.com screening assistant. Analyze this aircraft photograph for JetPhotos acceptance standards.
 Strictness level requested: ${strictness}.
 
-Return ONLY a raw JSON object with no markdown formatting or backticks matching this structure:
+Return ONLY a raw JSON object with no markdown formatting matching this structure:
 {
   "verdict": "ACCEPTED",
   "score": 85,
@@ -309,12 +388,7 @@ Return ONLY a raw JSON object with no markdown formatting or backticks matching 
         contents: [{
           parts: [
             { text: promptText },
-            {
-              inlineData: {
-                mimeType: selectedFile.type,
-                data: base64Data
-              }
-            }
+            { inlineData: { mimeType: selectedFile.type, data: base64Data } }
           ]
         }]
       })
@@ -323,17 +397,11 @@ Return ONLY a raw JSON object with no markdown formatting or backticks matching 
     const resData = await response.json();
     loadingSpinner.classList.add('hidden');
 
-    if (!response.ok) {
-      return alert(resData.error?.message || 'Gemini API request failed.');
-    }
+    if (!response.ok) return alert(resData.error?.message || 'Gemini API request failed.');
 
     let rawText = resData.candidates[0].content.parts[0].text.trim();
-
-    if (rawText.startsWith('```json')) {
-      rawText = rawText.replace(/^```json/, '').replace(/```$/, '').trim();
-    } else if (rawText.startsWith('```')) {
-      rawText = rawText.replace(/^```/, '').replace(/```$/, '').trim();
-    }
+    if (rawText.startsWith('```json')) rawText = rawText.replace(/^```json/, '').replace(/```$/, '').trim();
+    else if (rawText.startsWith('```')) rawText = rawText.replace(/^```/, '').replace(/```$/, '').trim();
 
     const parsedData = JSON.parse(rawText);
     resultsContent.classList.remove('hidden');
@@ -342,7 +410,7 @@ Return ONLY a raw JSON object with no markdown formatting or backticks matching 
   } catch (err) {
     console.error(err);
     loadingSpinner.classList.add('hidden');
-    alert('An error occurred during screening. Open developer tools (F12) for details.');
+    alert('An error occurred during screening.');
   }
 });
 
@@ -376,3 +444,16 @@ function displayResults(data) {
     });
   }
 }
+
+// Export PDF Report
+downloadPdfBtn.addEventListener('click', () => {
+  const element = document.getElementById('resultsContent');
+  const opt = {
+    margin:       0.5,
+    filename:     'JetPhotos_Screening_Report.pdf',
+    image:        { type: 'jpeg', quality: 0.98 },
+    html2canvas:  { scale: 2 },
+    jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+  };
+  html2pdf().set(opt).from(element).save();
+});
