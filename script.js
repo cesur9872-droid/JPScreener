@@ -7,6 +7,20 @@ const filterCanvas = document.getElementById('filterCanvas');
 const gridOverlay = document.getElementById('gridOverlay');
 const toolbar = document.getElementById('toolbar');
 
+// Batch Queue Elements
+const batchQueue = document.getElementById('batchQueue');
+const batchGrid = document.getElementById('batchGrid');
+const batchCount = document.getElementById('batchCount');
+const clearBatchBtn = document.getElementById('clearBatchBtn');
+
+// Interactive Comparison Slider Elements
+const compareContainer = document.getElementById('compareContainer');
+const beforeImg = document.getElementById('beforeImg');
+const afterWrapper = document.getElementById('afterWrapper');
+const afterCanvas = document.getElementById('afterCanvas');
+const compareSlider = document.getElementById('compareSlider');
+const toggleCompareBtn = document.getElementById('toggleCompareBtn');
+
 const toggleGridBtn = document.getElementById('toggleGridBtn');
 const toggleDustBtn = document.getElementById('toggleDustBtn');
 const toggleClippingBtn = document.getElementById('toggleClippingBtn');
@@ -35,13 +49,13 @@ const languageSelect = document.getElementById('languageSelect');
 const autoDustCheckbox = document.getElementById('autoDustCheckbox');
 const autoExifCheckbox = document.getElementById('autoExifCheckbox');
 
-let selectedFile = null;
+// State Data
+let batchFiles = [];
+let activeBatchIndex = 0;
 let originalImageObject = new Image();
-
-// Valid API Models
 const VALID_MODELS = ['gemini-3.6-flash', 'gemini-3.5-flash'];
 
-// Startup Initialization
+// App Init
 document.addEventListener('DOMContentLoaded', () => {
   const savedKey = localStorage.getItem('user_gemini_api_key') || '';
   let savedModel = localStorage.getItem('user_gemini_model');
@@ -90,13 +104,15 @@ saveSettingsBtn.addEventListener('click', () => {
   alert('Preferences saved successfully!');
 });
 
-// Drag & Drop
+// Drag & Drop & Multi-Upload
 dropZone.addEventListener('click', (e) => {
-  if (e.target.closest('.toolbar') || e.target.closest('button')) return;
+  if (e.target.closest('.toolbar') || e.target.closest('.compare-container') || e.target.closest('button')) return;
   imageInput.click();
 });
 
-imageInput.addEventListener('change', (e) => e.target.files.length && handleFile(e.target.files[0]));
+imageInput.addEventListener('change', (e) => {
+  if (e.target.files.length) handleBatchFiles(Array.from(e.target.files));
+});
 
 dropZone.addEventListener('dragover', (e) => {
   e.preventDefault();
@@ -108,41 +124,142 @@ dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover
 dropZone.addEventListener('drop', (e) => {
   e.preventDefault();
   dropZone.classList.remove('dragover');
-  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+  if (e.dataTransfer.files.length) handleBatchFiles(Array.from(e.dataTransfer.files));
 });
 
-function handleFile(file) {
-  if (!file.type.startsWith('image/')) return alert('Upload a valid image.');
-  selectedFile = file;
+function handleBatchFiles(files) {
+  const validFiles = files.filter(file => file.type.startsWith('image/'));
+  if (!validFiles.length) return alert('Upload valid images.');
 
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    previewImage.src = e.target.result;
-    originalImageObject.src = e.target.result;
+  validFiles.forEach(file => {
+    batchFiles.push({ file, result: null, previewUrl: URL.createObjectURL(file) });
+  });
 
-    originalImageObject.onload = () => {
-      dropContent.classList.add('hidden');
-      imageWrapper.classList.remove('hidden');
-      toolbar.classList.remove('hidden');
-      histogramSection.classList.remove('hidden');
-      screenBtn.disabled = false;
+  renderBatchGrid();
+  selectBatchItem(batchFiles.length - validFiles.length);
+}
 
-      generateBWHistogram(originalImageObject);
+function renderBatchGrid() {
+  batchGrid.innerHTML = '';
+  batchCount.textContent = batchFiles.length;
 
-      if (autoExifCheckbox.checked) {
-        exifSection.classList.remove('hidden');
-        extractEXIFData(selectedFile);
-      } else {
-        exifSection.classList.add('hidden');
-      }
+  if (batchFiles.length > 1) {
+    batchQueue.classList.remove('hidden');
+  } else {
+    batchQueue.classList.add('hidden');
+  }
 
-      if (autoDustCheckbox.checked) {
-        applyJetPhotosEqualizeFilter();
-        toggleDustBtn.classList.add('active');
-      }
-    };
+  batchFiles.forEach((item, index) => {
+    const div = document.createElement('div');
+    div.className = `batch-item ${index === activeBatchIndex ? 'active' : ''}`;
+    
+    const statusClass = item.result ? item.result.verdict : '';
+    div.innerHTML = `
+      <img src="${item.previewUrl}" alt="Thumbnail">
+      <div class="batch-status-badge ${statusClass}"></div>
+    `;
+    div.addEventListener('click', (e) => {
+      e.stopPropagation();
+      selectBatchItem(index);
+    });
+    batchGrid.appendChild(div);
+  });
+}
+
+function selectBatchItem(index) {
+  if (index < 0 || index >= batchFiles.length) return;
+  activeBatchIndex = index;
+  renderBatchGrid();
+
+  const currentItem = batchFiles[activeBatchIndex];
+  originalImageObject.src = currentItem.previewUrl;
+  previewImage.src = currentItem.previewUrl;
+  beforeImg.src = currentItem.previewUrl;
+
+  originalImageObject.onload = () => {
+    dropContent.classList.add('hidden');
+    imageWrapper.classList.remove('hidden');
+    toolbar.classList.remove('hidden');
+    histogramSection.classList.remove('hidden');
+    screenBtn.disabled = false;
+
+    resetView();
+    generateBWHistogram(originalImageObject);
+
+    if (autoExifCheckbox.checked) {
+      exifSection.classList.remove('hidden');
+      extractEXIFData(currentItem.file);
+    } else {
+      exifSection.classList.add('hidden');
+    }
+
+    if (autoDustCheckbox.checked) {
+      applyJetPhotosEqualizeFilter();
+      toggleDustBtn.classList.add('active');
+    }
+
+    if (currentItem.result) {
+      resultsSection.classList.remove('hidden');
+      resultsContent.classList.remove('hidden');
+      displayResults(currentItem.result);
+    } else {
+      resultsSection.classList.add('hidden');
+    }
   };
-  reader.readAsDataURL(file);
+}
+
+clearBatchBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  batchFiles = [];
+  activeBatchIndex = 0;
+  batchQueue.classList.add('hidden');
+  imageWrapper.classList.add('hidden');
+  toolbar.classList.add('hidden');
+  dropContent.classList.remove('hidden');
+  screenBtn.disabled = true;
+  exifSection.classList.add('hidden');
+  histogramSection.classList.add('hidden');
+  resultsSection.classList.add('hidden');
+});
+
+// Comparison Slider Controls
+compareSlider.addEventListener('input', (e) => {
+  const val = e.target.value;
+  afterWrapper.style.width = `${val}%`;
+});
+
+toggleCompareBtn.addEventListener('click', () => {
+  if (compareContainer.classList.contains('hidden')) {
+    resetView();
+    renderSimulatedFixCanvas();
+    compareContainer.classList.remove('hidden');
+    previewImage.classList.add('hidden');
+    toggleCompareBtn.classList.add('active');
+  } else {
+    resetView();
+  }
+});
+
+function renderSimulatedFixCanvas() {
+  const canvas = afterCanvas;
+  const ctx = canvas.getContext('2d');
+  const w = originalImageObject.naturalWidth;
+  const h = originalImageObject.naturalHeight;
+  canvas.width = w; canvas.height = h;
+
+  ctx.drawImage(originalImageObject, 0, 0);
+
+  // Apply subtle contrast/sharpness simulation
+  const imgData = ctx.getImageData(0, 0, w, h);
+  const data = imgData.data;
+  
+  for (let i = 0; i < data.length; i += 4) {
+    // Slight Contrast Stretch
+    data[i] = Math.min(255, Math.max(0, (data[i] - 128) * 1.1 + 128));
+    data[i+1] = Math.min(255, Math.max(0, (data[i+1] - 128) * 1.1 + 128));
+    data[i+2] = Math.min(255, Math.max(0, (data[i+2] - 128) * 1.1 + 128));
+  }
+  ctx.putImageData(imgData, 0, 0);
 }
 
 // EXIF Data Extraction
@@ -179,6 +296,8 @@ toggleGridBtn.addEventListener('click', () => {
 
 toggleDustBtn.addEventListener('click', () => {
   toggleClippingBtn.classList.remove('active');
+  toggleCompareBtn.classList.remove('active');
+  compareContainer.classList.add('hidden');
   if (filterCanvas.classList.contains('hidden') || !toggleDustBtn.classList.contains('active')) {
     applyJetPhotosEqualizeFilter();
     toggleDustBtn.classList.add('active');
@@ -189,6 +308,8 @@ toggleDustBtn.addEventListener('click', () => {
 
 toggleClippingBtn.addEventListener('click', () => {
   toggleDustBtn.classList.remove('active');
+  toggleCompareBtn.classList.remove('active');
+  compareContainer.classList.add('hidden');
   if (filterCanvas.classList.contains('hidden') || !toggleClippingBtn.classList.contains('active')) {
     applyClippingMaskFilter();
     toggleClippingBtn.classList.add('active');
@@ -203,9 +324,11 @@ function resetView() {
   previewImage.classList.remove('hidden');
   filterCanvas.classList.add('hidden');
   gridOverlay.classList.add('hidden');
+  compareContainer.classList.add('hidden');
   toggleGridBtn.classList.remove('active');
   toggleDustBtn.classList.remove('active');
   toggleClippingBtn.classList.remove('active');
+  toggleCompareBtn.classList.remove('active');
 }
 
 function applyJetPhotosEqualizeFilter() {
@@ -269,9 +392,9 @@ function applyClippingMaskFilter() {
   for (let i = 0; i < data.length; i += 4) {
     const r = data[i], g = data[i + 1], b = data[i + 2];
     if (r >= 254 && g >= 254 && b >= 254) {
-      data[i] = 255; data[i + 1] = 0; data[i + 2] = 0; // Highlight Clipping (Red)
+      data[i] = 255; data[i + 1] = 0; data[i + 2] = 0;
     } else if (r <= 2 && g <= 2 && b <= 2) {
-      data[i] = 0; data[i + 1] = 0; data[i + 2] = 255; // Shadow Clipping (Blue)
+      data[i] = 0; data[i + 1] = 0; data[i + 2] = 255;
     }
   }
 
@@ -297,19 +420,16 @@ function generateBWHistogram(imgObj) {
   drawBWHistogramCanvas(bwHist);
 }
 
-// Compact Histogram Rendering (Matching Photo Reference Dimensions)
 function drawBWHistogramCanvas(hist) {
   const ctx = histogramCanvas.getContext('2d');
   const width = histogramCanvas.width;
   const height = histogramCanvas.height;
 
-  // Pure White Background
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, width, height);
 
   const maxVal = Math.max(...hist) || 1;
 
-  // Midtone horizontal reference dotted pink line
   ctx.strokeStyle = '#f472b6';
   ctx.lineWidth = 1;
   ctx.setLineDash([2, 2]);
@@ -317,9 +437,8 @@ function drawBWHistogramCanvas(hist) {
   ctx.moveTo(0, height * 0.7);
   ctx.lineTo(width, height * 0.7);
   ctx.stroke();
-  ctx.setLineDash([]); // Reset dash
+  ctx.setLineDash([]);
 
-  // Solid Gray Area Fill Curve
   ctx.beginPath();
   ctx.moveTo(0, height);
 
@@ -335,7 +454,6 @@ function drawBWHistogramCanvas(hist) {
   ctx.fillStyle = '#8e8e8e';
   ctx.fill();
 
-  // Solid Light-Blue Top Contour
   ctx.strokeStyle = '#60a5fa';
   ctx.lineWidth = 1.2;
   ctx.stroke();
@@ -343,7 +461,7 @@ function drawBWHistogramCanvas(hist) {
 
 // Gemini Screening API Integration
 screenBtn.addEventListener('click', async () => {
-  if (!selectedFile) return;
+  if (!batchFiles.length) return;
 
   const userApiKey = localStorage.getItem('user_gemini_api_key') || '';
   let userModel = localStorage.getItem('user_gemini_model') || 'gemini-3.6-flash';
@@ -357,12 +475,14 @@ screenBtn.addEventListener('click', async () => {
   loadingSpinner.classList.remove('hidden');
   resultsContent.classList.add('hidden');
 
+  const activeItem = batchFiles[activeBatchIndex];
+
   try {
     const base64Data = await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result.split(',')[1]);
       reader.onerror = error => reject(error);
-      reader.readAsDataURL(selectedFile);
+      reader.readAsDataURL(activeItem.file);
     });
 
     const promptText = `You are a strict JetPhotos.com screening assistant. Analyze this aircraft photograph for JetPhotos acceptance standards.
@@ -393,7 +513,7 @@ Return ONLY a raw JSON object with no markdown formatting matching this structur
         contents: [{
           parts: [
             { text: promptText },
-            { inlineData: { mimeType: selectedFile.type, data: base64Data } }
+            { inlineData: { mimeType: activeItem.file.type, data: base64Data } }
           ]
         }]
       })
@@ -409,6 +529,11 @@ Return ONLY a raw JSON object with no markdown formatting matching this structur
     else if (rawText.startsWith('```')) rawText = rawText.replace(/^```/, '').replace(/```$/, '').trim();
 
     const parsedData = JSON.parse(rawText);
+    
+    // Save Result to Active Batch Item State
+    activeItem.result = parsedData;
+    renderBatchGrid();
+
     resultsContent.classList.remove('hidden');
     displayResults(parsedData);
 
