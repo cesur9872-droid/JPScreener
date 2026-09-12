@@ -1,24 +1,19 @@
 import express from 'express';
+import cors from 'cors';
 import multer from 'multer';
 import { GoogleGenAI } from '@google/genai';
 
 const app = express();
 const port = process.env.PORT || 3000;
 
+// Enable CORS for all routes and custom headers
+app.use(cors({
+  origin: '*',
+  allowedHeaders: ['Content-Type', 'x-api-key', 'x-model', 'x-strictness'],
+  methods: ['GET', 'POST', 'OPTIONS']
+}));
+
 const upload = multer({ storage: multer.memoryStorage() });
-
-// --- CORS & Preflight Middleware ---
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, x-api-key, x-model, x-strictness');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-  next();
-});
-
 app.use(express.json());
 
 app.get('/', (req, res) => {
@@ -32,11 +27,16 @@ app.post('/api/prescreen', upload.single('photo'), async (req, res) => {
     }
 
     const apiKey = req.headers['x-api-key'] || process.env.GEMINI_API_KEY;
-    const modelName = req.headers['x-model'] || 'gemini-2.5-flash';
+    let modelName = req.headers['x-model'] || 'gemini-2.5-flash';
     const strictness = req.headers['x-strictness'] || 'standard';
 
+    // Fallback if invalid model sent
+    if (modelName.includes('3.5')) {
+      modelName = 'gemini-2.5-flash';
+    }
+
     if (!apiKey) {
-      return res.status(401).json({ error: 'Missing GEMINI_API_KEY on server and client.' });
+      return res.status(401).json({ error: 'Missing GEMINI_API_KEY. Set it in Settings or Render env.' });
     }
 
     const ai = new GoogleGenAI({ apiKey });
@@ -54,17 +54,17 @@ Strictness level requested: ${strictness}.
 Return ONLY a raw JSON object with no markdown formatting or backticks matching this structure:
 {
   "verdict": "ACCEPTED" or "REJECTED",
-  "score": "A number from 0 to 100",
+  "score": 85,
   "summary": "Brief overall assessment",
   "reject_reasons": [
     {
-      "category": "e.g., Centering, Softness/Blur, Dust Spots, Over-exposure, Framing",
-      "severity": "Low", "Medium", or "High",
-      "description": "Specific details on why it violates guidelines"
+      "category": "Centering",
+      "severity": "High",
+      "description": "Aircraft is off-center towards the top."
     }
   ],
   "photographer_tips": [
-    "Actionable editing tips to fix the issues"
+    "Crop tighter at the bottom."
   ]
 }`;
 
@@ -74,7 +74,7 @@ Return ONLY a raw JSON object with no markdown formatting or backticks matching 
     });
 
     let textResponse = response.text.trim();
-    
+
     if (textResponse.startsWith('```json')) {
       textResponse = textResponse.replace(/^```json/, '').replace(/```$/, '').trim();
     } else if (textResponse.startsWith('```')) {
