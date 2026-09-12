@@ -365,6 +365,38 @@ function displayResults(data) {
       const li = document.createElement('li');
       li.textContent = tip;
       tipsList.appendChild(li);
+      function drawBWHistogramCanvas(hist) {
+  const ctx = histogramCanvas.getContext('2d');
+  const width = histogramCanvas.width;
+  const height = histogramCanvas.height;
+  
+  // Clean canvas background (Pure White like JetPhotos/Photoshop panel)
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+
+  const maxVal = Math.max(...hist) || 1;
+
+  ctx.beginPath();
+  ctx.moveTo(0, height);
+
+  for (let i = 0; i < 256; i++) {
+    const x = (i / 255) * width;
+    const barHeight = (hist[i] / maxVal) * (height - 5);
+    ctx.lineTo(x, height - barHeight);
+  }
+
+  ctx.lineTo(width, height);
+  ctx.closePath();
+
+  // Solid Gray Histogram Fill
+  ctx.fillStyle = '#808080';
+  ctx.fill();
+
+  // Light Blue Outline Stroke (Photoshop / JetPhotos Style)
+  ctx.strokeStyle = '#3b82f6';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
     });
   }
 }
