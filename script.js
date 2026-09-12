@@ -44,7 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const savedAutoDust = localStorage.getItem('app_auto_dust') === 'true';
 
   if (!savedModel || !VALID_MODELS.includes(savedModel)) {
-    savedModel = 'gemini-3.5-flash';
+    savedModel = 'gemini-2.5-flash';
     localStorage.setItem('user_gemini_model', savedModel);
   }
 
@@ -244,47 +244,96 @@ function drawBWHistogramCanvas(hist) {
   ctx.fill();
 }
 
-// API Trigger
+// API Trigger (Direct Browser Gemini Call for GitHub Pages)
 screenBtn.addEventListener('click', async () => {
   if (!selectedFile) return;
 
   const userApiKey = localStorage.getItem('user_gemini_api_key') || '';
-  let userModel = localStorage.getItem('user_gemini_model') || 'gemini-3.5-flash';
+  let userModel = localStorage.getItem('user_gemini_model') || 'gemini-2.5-flash';
   const strictness = localStorage.getItem('app_strictness') || 'standard';
 
-  if (!VALID_MODELS.includes(userModel)) {
-    userModel = 'gemini-3.5-flash';
+  if (!userApiKey) {
+    alert('Please click Settings (gear icon) and enter your Gemini API Key!');
+    return;
+  }
+
+  if (!VALID_MODELS.includes(userModel) || userModel.includes('3.5')) {
+    userModel = 'gemini-2.5-flash';
   }
 
   resultsSection.classList.remove('hidden');
   loadingSpinner.classList.remove('hidden');
   resultsContent.classList.add('hidden');
 
-  const formData = new FormData();
-  formData.append('photo', selectedFile);
-
   try {
-    const response = await fetch('https://jetphotosscreener.onrender.com/api/prescreen', {
-      method: 'POST',
-      headers: {
-        'x-api-key': userApiKey,
-        'x-model': userModel,
-        'x-strictness': strictness
-      },
-      body: formData
+    const base64Data = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = error => reject(error);
+      reader.readAsDataURL(selectedFile);
     });
 
-    const data = await response.json();
+    const promptText = `You are a strict JetPhotos.com screening assistant. Analyze this aircraft photograph for JetPhotos acceptance standards.
+Strictness level requested: ${strictness}.
+
+Return ONLY a raw JSON object with no markdown formatting or backticks matching this structure:
+{
+  "verdict": "ACCEPTED",
+  "score": 85,
+  "summary": "Brief overall assessment",
+  "reject_reasons": [
+    {
+      "category": "Centering",
+      "severity": "High",
+      "description": "Aircraft is off-center towards the top."
+    }
+  ],
+  "photographer_tips": [
+    "Crop tighter at the bottom."
+  ]
+}`;
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${userModel}:generateContent?key=${userApiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: promptText },
+            {
+              inlineData: {
+                mimeType: selectedFile.type,
+                data: base64Data
+              }
+            }
+          ]
+        }]
+      })
+    });
+
+    const resData = await response.json();
     loadingSpinner.classList.add('hidden');
 
-    if (!response.ok) return alert(data.error || 'Request failed.');
+    if (!response.ok) {
+      return alert(resData.error?.message || 'Gemini API request failed.');
+    }
 
+    let rawText = resData.candidates[0].content.parts[0].text.trim();
+
+    if (rawText.startsWith('```json')) {
+      rawText = rawText.replace(/^```json/, '').replace(/```$/, '').trim();
+    } else if (rawText.startsWith('```')) {
+      rawText = rawText.replace(/^```/, '').replace(/```$/, '').trim();
+    }
+
+    const parsedData = JSON.parse(rawText);
     resultsContent.classList.remove('hidden');
-    displayResults(data);
+    displayResults(parsedData);
+
   } catch (err) {
     console.error(err);
     loadingSpinner.classList.add('hidden');
-    alert('An error occurred during screening.');
+    alert('An error occurred during screening. Open developer tools (F12) for details.');
   }
 });
 
