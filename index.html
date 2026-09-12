@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>JetPhotos AI Pre-Screener Pro</title>
   <link rel="stylesheet" href="style.css">
-  <!-- EXIF Parsing Library -->
   <script src="https://cdn.jsdelivr.net/npm/exif-js"></script>
 </head>
 <body>
@@ -24,20 +23,34 @@
     </header>
 
     <main>
+      <!-- Upload Zone with Multi-file Support -->
       <section class="upload-section">
         <div class="drop-zone" id="dropZone">
-          <input type="file" id="imageInput" accept="image/jpeg, image/png" hidden>
+          <input type="file" id="imageInput" accept="image/jpeg, image/png" multiple hidden>
           <div class="drop-zone-content" id="dropContent">
             <svg class="upload-svg" width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
             </svg>
-            <p>Drag & drop aircraft photo here or <span>browse file</span></p>
-            <small>Supports high-resolution JPEG, PNG</small>
+            <p>Drag & drop aircraft photos here or <span>browse files</span></p>
+            <small>Supports batch upload (JPEG, PNG)</small>
           </div>
 
+          <!-- Single Image Preview & Comparison Slider Container -->
           <div class="image-wrapper hidden" id="imageWrapper">
+            <!-- Normal Single Preview Image -->
             <img id="previewImage" class="preview-img" alt="Uploaded Preview">
             <canvas id="filterCanvas" class="hidden"></canvas>
+
+            <!-- Interactive Before/After Comparison Container -->
+            <div id="compareContainer" class="compare-container hidden">
+              <img id="beforeImg" class="compare-img before" alt="Original Photo">
+              <div id="afterWrapper" class="compare-after-wrapper">
+                <canvas id="afterCanvas" class="compare-img after"></canvas>
+              </div>
+              <input type="range" id="compareSlider" min="0" max="100" value="50" class="compare-slider">
+              <div class="compare-label before-label">Original</div>
+              <div class="compare-label after-label" id="afterLabelText">Simulated Fix</div>
+            </div>
 
             <!-- Centering Grid Overlay -->
             <div id="gridOverlay" class="grid-overlay hidden">
@@ -49,20 +62,29 @@
           </div>
         </div>
 
+        <!-- Multi-Photo Batch Queue Drawer -->
+        <div id="batchQueue" class="batch-queue hidden">
+          <div class="batch-queue-header">
+            <span>Batch Upload Queue (<span id="batchCount">0</span>)</span>
+            <button id="clearBatchBtn" class="clear-btn">Clear All</button>
+          </div>
+          <div class="batch-grid" id="batchGrid"></div>
+        </div>
+
         <!-- Cockpit Controls Bar -->
         <div class="toolbar hidden" id="toolbar">
           <button id="toggleGridBtn" class="tool-btn">🎯 Centering Grid</button>
           <button id="toggleDustBtn" class="tool-btn">🔍 Dust Equalizer</button>
           <button id="toggleClippingBtn" class="tool-btn">⚠️ Clipping Mask</button>
+          <button id="toggleCompareBtn" class="tool-btn">⚡ Before/After Simulator</button>
           <button id="resetViewBtn" class="tool-btn reset-btn">↺ Reset View</button>
         </div>
 
-        <button id="screenBtn" class="btn" disabled>Screen Photo</button>
+        <button id="screenBtn" class="btn" disabled>Screen Selected Photo</button>
       </section>
 
-      <!-- Compact Inspector Panel (EXIF & Compact Histogram Side-by-Side) -->
+      <!-- Inspector Deck -->
       <div class="inspector-deck">
-        <!-- EXIF Card -->
         <section class="exif-section hidden" id="exifSection">
           <div class="panel-header">
             <h3>Camera EXIF Data</h3>
@@ -71,7 +93,6 @@
           <div class="exif-grid" id="exifGrid"></div>
         </section>
 
-        <!-- Compact Compact Histogram -->
         <section class="histogram-section hidden" id="histogramSection">
           <div class="panel-header">
             <h3>Luminance Histogram</h3>
@@ -131,16 +152,11 @@
       </div>
       
       <div class="modal-body">
-        <!-- Category 1: API & Engine -->
         <div class="setting-category">
-          <div class="category-title">
-            <span class="cat-icon">🔑</span> API & Model Engine
-          </div>
-          
+          <div class="category-title"><span class="cat-icon">🔑</span> API & Model Engine</div>
           <div class="setting-group">
             <label for="apiKeyInput">Gemini API Key</label>
             <input type="password" id="apiKeyInput" placeholder="Paste your API key here..." />
-            
             <div class="api-tutorial-box">
               <strong>Need a free API Key?</strong>
               <ol>
@@ -149,7 +165,6 @@
               </ol>
             </div>
           </div>
-
           <div class="setting-group">
             <label for="modelSelect">Intelligence Model</label>
             <select id="modelSelect">
@@ -159,12 +174,8 @@
           </div>
         </div>
 
-        <!-- Category 2: Screening Parameters -->
         <div class="setting-category">
-          <div class="category-title">
-            <span class="cat-icon">⚙️</span> Screening Parameters
-          </div>
-          
+          <div class="category-title"><span class="cat-icon">⚙️</span> Screening Parameters</div>
           <div class="setting-group">
             <label for="strictnessSelect">Rejection Strictness</label>
             <select id="strictnessSelect">
@@ -173,7 +184,6 @@
               <option value="lenient">Lenient (Feedback Only)</option>
             </select>
           </div>
-
           <div class="setting-group">
             <label for="languageSelect">Report Language</label>
             <select id="languageSelect">
@@ -185,12 +195,8 @@
           </div>
         </div>
 
-        <!-- Category 3: Workspace & Display -->
         <div class="setting-category">
-          <div class="category-title">
-            <span class="cat-icon">🎨</span> Workspace & Display
-          </div>
-
+          <div class="category-title"><span class="cat-icon">🎨</span> Workspace & Display</div>
           <div class="setting-group">
             <label for="themeSelect">UI Accent Theme</label>
             <select id="themeSelect">
@@ -199,14 +205,12 @@
               <option value="light">Light Studio</option>
             </select>
           </div>
-
           <div class="setting-group checkbox-group">
             <label for="autoDustCheckbox">
               <input type="checkbox" id="autoDustCheckbox">
               Auto-activate Dust Equalizer on upload
             </label>
           </div>
-
           <div class="setting-group checkbox-group">
             <label for="autoExifCheckbox">
               <input type="checkbox" id="autoExifCheckbox" checked>
